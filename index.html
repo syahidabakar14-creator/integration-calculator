@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Integration Calculator</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f5f7fb;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            width: 100%;
+            max-width: 800px;
+        }
+        h1 {
+            font-size: 1.5rem;
+            margin-top: 0;
+            color: #1e293b;
+            text-align: center;
+        }
+        .control-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        .input-group {
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: #64748b;
+            margin-bottom: 5px;
+        }
+        input {
+            padding: 8px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input:focus {
+            border-color: #3b82f6;
+        }
+        .result-box {
+            text-align: center;
+            font-size: 1.25rem;
+            font-weight: bold;
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #eff6ff;
+            color: #1d4ed8;
+            border-radius: 8px;
+            border: 1px solid #bfdbfe;
+        }
+        .error {
+            color: #ef4444;
+            background-color: #fef2f2;
+            border-color: #fca5a5;
+        }
+        .canvas-container {
+            position: relative;
+            height: 400px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Definite Integration Calculator</h1>
+    
+    <div class="control-panel">
+        <div class="input-group" style="grid-column: span 2;">
+            <label for="function">Function f(x)</label>
+            <input type="text" id="function" value="x^2 - 2x + 1" placeholder="e.g., sin(x), x^2">
+        </div>
+        <div class="input-group">
+            <label for="lowerBound">Lower Limit (a)</label>
+            <input type="number" id="lowerBound" value="0" step="any">
+        </div>
+        <div class="input-group">
+            <label for="upperBound">Upper Limit (b)</label>
+            <input type="number" id="upperBound" value="3" step="any">
+        </div>
+    </div>
+
+    <div id="result" class="result-box">
+        Area: Calculating...
+    </div>
+
+    <div class="canvas-container">
+        <canvas id="plotChart"></canvas>
+    </div>
+</div>
+
+<script>
+    let chart;
+    const ctx = document.getElementById('plotChart').getContext('2d');
+
+    // Set up inputs listeners
+    document.getElementById('function').addEventListener('input', updateCalculator);
+    document.getElementById('lowerBound').addEventListener('input', updateCalculator);
+    document.getElementById('upperBound').addEventListener('input', updateCalculator);
+
+    function calculateIntegral(f, a, b, steps = 1000) {
+        // Simpson's Rule for accurate numerical integration
+        const h = (b - a) / steps;
+        let sum = f(a) + f(b);
+
+        for (let i = 1; i < steps; i++) {
+            const x = a + i * h;
+            sum += i % 2 === 0 ? 2 * f(x) : 4 * f(x);
+        }
+        return (h / 3) * sum;
+    }
+
+    function updateCalculator() {
+        const exprString = document.getElementById('function').value;
+        const a = parseFloat(document.getElementById('lowerBound').value);
+        const b = parseFloat(document.getElementById('upperBound').value);
+        const resultDiv = document.getElementById('result');
+
+        if (isNaN(a) || isNaN(b)) {
+            resultDiv.innerHTML = "Please enter valid bounds.";
+            resultDiv.className = "result-box error";
+            return;
+        }
+
+        try {
+            // Compile user input using math.js
+            const expr = math.compile(exprString);
+            const f = (x) => expr.evaluate({ x: x });
+
+            // Test if function evaluates properly
+            f(a);
+
+            // Calculate the numerical area
+            const integralValue = calculateIntegral(f, a, b);
+            resultDiv.innerHTML = `$$\\int_{${a}}^{${b}} f(x)\\,dx \\approx ${integralValue.toFixed(4)}$$`;
+            resultDiv.className = "result-box";
+
+            // Generate graph data
+            generateGraph(f, a, b);
+
+        } catch (error) {
+            resultDiv.innerHTML = "Invalid expression or math error.";
+            resultDiv.className = "result-box error";
+        }
+    }
+
+    function generateGraph(f, a, b) {
+        // Expand view slightly beyond bounds for context
+        const padding = Math.max(1, Math.abs(b - a) * 0.5);
+        const startX = Math.min(a, b) - padding;
+        const endX = Math.max(a, b) + padding;
+        
+        const linePoints = [];
+        const fillPoints = [];
+        
+        const steps = 200;
+        const stepSize = (endX - startX) / steps;
+
+        for (let i = 0; i <= steps; i++) {
+            const x = startX + i * stepSize;
+            let y = 0;
+            try {
+                y = f(x);
+            } catch(e) {}
+
+            // Line data
+            linePoints.push({ x: x, y: y });
+
+            // Shaded region data (only between a and b)
+            if (x >= Math.min(a, b) && x <= Math.max(a, b)) {
+                fillPoints.push({ x: x, y: y });
+            }
+        }
+
+        // Destroy previous chart instance if it exists
+        if (chart) {
+            chart.destroy();
+        }
+
+        // Render new chart
+        chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [
+                    {
+                        label: 'f(x)',
+                        data: linePoints,
+                        borderColor: '#2563eb',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: false
+                    },
+                    {
+                        label: 'Integrated Area',
+                        data: fillPoints,
+                        backgroundColor: 'rgba(59, 130, 246, 0.3)',
+                        fill: 'origin', // Fills down to y=0
+                        pointRadius: 0,
+                        borderWidth: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        type: 'linear',
+                        position: 'bottom',
+                        grid: { color: '#e2e8f0' }
+                    },
+                    y: {
+                        type: 'linear',
+                        grid: { color: '#e2e8f0' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    }
+
+    // Run on initial load
+    updateCalculator();
+</script>
+
+</body>
+</html>
